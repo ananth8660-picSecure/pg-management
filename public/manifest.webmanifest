@@ -1,0 +1,16 @@
+{
+  "name": "PG Ops by PicSecure",
+  "short_name": "PG Ops",
+  "description": "Private PG operations, residents, vacancy and rent management workspace.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#f4f6fb",
+  "theme_color": "#111729",
+  "orientation": "any",
+  "icons": [
+    {"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"},
+    {"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"maskable"}
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "pg-ops-premium",
+  "version": "1.18.0",
+  "private": true,
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --open",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "r2:install": "cd r2-worker && npm install",
+    "r2:bucket": "cd r2-worker && npm run create:bucket",
+    "r2:deploy": "cd r2-worker && npm run deploy",
+    "functions:install": "cd functions && npm install",
+    "functions:build": "cd functions && npm run build",
+    "functions:deploy": "cd functions && npm run deploy",
+    "deploy:backend": "firebase deploy --only firestore:rules,functions",
+    "deploy:firebase": "firebase deploy --only firestore:rules,functions,hosting",
+    "deploy:final": "npm run functions:build && firebase deploy --only firestore:rules,functions,hosting && npm run r2:deploy",
+    "verify:final": "npm run build && npm run functions:build",
+    "audit:deps": "npm audit --omit=dev",
+    "ci:verify": "npm run build && npm run functions:build"
+  },
+  "dependencies": {
+    "@angular/common": "20.3.16",
+    "@angular/compiler": "20.3.16",
+    "@angular/core": "20.3.16",
+    "@angular/forms": "20.3.16",
+    "@angular/platform-browser": "20.3.16",
+    "@angular/router": "20.3.16",
+    "firebase": "^11.10.0",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular/build": "20.3.16",
+    "@angular/cli": "20.3.16",
+    "@angular/compiler-cli": "20.3.16",
+    "typescript": "~5.9.3"
+  }
+}

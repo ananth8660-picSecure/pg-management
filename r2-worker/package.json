@@ -1,0 +1,17 @@
+{
+  "name": "mana-pg-r2-vault-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "create:bucket": "wrangler r2 bucket create mana-pg-management"
+  },
+  "dependencies": {
+    "jose": "^6.0.13"
+  },
+  "devDependencies": {
+    "wrangler": "^4.32.0",
+    "typescript": "^5.9.2"
+  }
+}

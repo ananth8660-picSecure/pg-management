@@ -1,0 +1,12 @@
+name = "mana-pg-files"
+main = "src/index.ts"
+compatibility_date = "2026-09-24"
+
+[[r2_buckets]]
+binding = "PG_FILES"
+bucket_name = "mana-pg-management"
+
+[vars]
+FIREBASE_PROJECT_ID = "mana-pg"
+ALLOWED_ORIGIN = "https://pg.picsecure.in"
+KEY_ID = "pg-files-v1"

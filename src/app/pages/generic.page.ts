@@ -1,0 +1,3 @@
+import { Component } from '@angular/core';import { ActivatedRoute } from '@angular/router';
+@Component({standalone:true,template:`<div class="page-head"><div><p class="eyebrow">PG OPERATIONS</p><h1>{{title}}</h1><p>Premium module shell ready for the next production phase.</p></div></div><section class="panel empty-state"><div>✦</div><h2>{{title}}</h2><p>The reusable layout, permissions and navigation are already wired. This module can now be extended without changing the core architecture.</p></section>`})
+export class GenericPage{title='Module';constructor(route:ActivatedRoute){this.title=route.snapshot.data['title']||'Module'}}

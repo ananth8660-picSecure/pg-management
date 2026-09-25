@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function email() { return signedIn() ? request.auth.token.email : null; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function myProfileExists() { return signedIn() && exists(userPath(request.auth.uid)); }
+    function myProfile() { return get(userPath(request.auth.uid)).data; }
+    function platformOwner() { return myProfileExists() && myProfile().active != false && myProfile().platformRole == 'platform_owner'; }
+    function tenantPath(tid) { return /databases/$(database)/documents/tenants/$(tid); }
+    function tenantEnabled(tid) { return exists(tenantPath(tid)) && get(tenantPath(tid)).data.active != false; }
+    function tenantSessionValid(tid) { return !('forceLogoutEpoch' in get(tenantPath(tid)).data) || request.auth.token.auth_time >= get(tenantPath(tid)).data.forceLogoutEpoch; }
+    function memberPath(tid, uid) { return /databases/$(database)/documents/tenants/$(tid)/members/$(uid); }
+    function hasMembership(tid) { return signedIn() && exists(memberPath(tid, request.auth.uid)); }
+    function membership(tid) { return get(memberPath(tid, request.auth.uid)).data; }
+    function memberSessionValid(tid) { return !('forceLogoutEpoch' in membership(tid)) || request.auth.token.auth_time >= membership(tid).forceLogoutEpoch; }
+    function activeMember(tid) { return hasMembership(tid) && membership(tid).active != false && memberSessionValid(tid) && (platformOwner() || (tenantEnabled(tid) && tenantSessionValid(tid))); }
+    function tenantOwner(tid) { return activeMember(tid) && membership(tid).role == 'owner'; }
+    function tenantManager(tid) { return activeMember(tid) && membership(tid).role == 'manager'; }
+    function permission(tid, p) { return tenantOwner(tid) || (tenantManager(tid) && membership(tid).permissions is list && membership(tid).permissions.hasAny([p])); }
+    function bootstrapPlatformOwner() { return signedIn() && request.auth.uid == 'ePgzejfMinUyvrWMtQe4C5gYwg73'; }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || platformOwner() || (resource.data.activeTenantId is string && tenantOwner(resource.data.activeTenantId)));
+      allow list: if platformOwner();
+      allow create: if signedIn() && (
+        platformOwner() ||
+        (request.auth.uid == uid && bootstrapPlatformOwner() && request.resource.data.platformRole == 'platform_owner' && request.resource.data.activeTenantId == 'mana-pg') ||
+        (request.resource.data.activeTenantId is string && tenantOwner(request.resource.data.activeTenantId) && request.resource.data.platformRole == 'tenant_user')
+      );
+      allow update: if signedIn() && (
+        platformOwner() ||
+        (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeTenantId','updatedAt'])) ||
+        (request.auth.uid == uid && bootstrapPlatformOwner() && resource.data.platformRole != 'platform_owner' && request.resource.data.platformRole == 'platform_owner' && request.resource.data.activeTenantId == 'mana-pg')
+      );
+      allow delete: if platformOwner();
+    }
+
+    match /tenants/{tid} {
+      allow get: if signedIn() && (platformOwner() || hasMembership(tid) || (tid == 'mana-pg' && bootstrapPlatformOwner()));
+      allow list: if platformOwner();
+      allow create: if platformOwner() || (signedIn() && tid == 'mana-pg' && bootstrapPlatformOwner() && request.resource.data.createdBy == request.auth.uid);
+      // Customer PG Owners may update branding only. Platform/commercial access fields
+      // (active, forceLogoutEpoch, customer/sale metadata, owner identity) remain creator-controlled.
+      allow update: if platformOwner() || (tenantOwner(tid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','shortName','city','logo','updatedAt','updatedBy']));
+      allow delete: if platformOwner();
+
+      match /members/{uid} {
+        allow get: if signedIn() && (request.auth.uid == uid || platformOwner() || tenantOwner(tid));
+        allow list: if platformOwner() || tenantOwner(tid);
+        allow create: if platformOwner() || (tenantOwner(tid) && request.resource.data.get('platformOversight', false) != true) ||
+          (signedIn() && tid == 'mana-pg' && request.auth.uid == uid && bootstrapPlatformOwner() && request.resource.data.role == 'owner');
+        allow update: if platformOwner() || (
+          tenantOwner(tid)
+          && resource.data.get('platformOversight', false) != true
+          && request.resource.data.get('platformOversight', false) != true
+          // An Owner can never disable or demote their own membership through a direct API call.
+          && (request.auth.uid != uid || (request.resource.data.role == 'owner' && request.resource.data.active != false))
+        );
+        allow delete: if platformOwner() || (tenantOwner(tid) && request.auth.uid != uid && resource.data.get('platformOversight', false) != true);
+      }
+
+      match /blocks/{id} { allow read: if permission(tid,'dashboard') || permission(tid,'reports') || permission(tid,'property') || permission(tid,'amenities') || permission(tid,'vacancy') || permission(tid,'residents'); allow write: if tenantOwner(tid); }
+      match /rooms/{id} { allow read: if permission(tid,'dashboard') || permission(tid,'reports') || permission(tid,'property') || permission(tid,'amenities') || permission(tid,'vacancy') || permission(tid,'residents'); allow create: if tenantOwner(tid); allow update: if tenantOwner(tid) || (permission(tid,'residents') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['beds'])); allow delete: if tenantOwner(tid); }
+      match /floorInventories/{id} { allow read: if permission(tid,'reports') || permission(tid,'amenities') || permission(tid,'property'); allow write: if tenantOwner(tid); }
+      match /residents/{id} { allow read: if permission(tid,'dashboard') || permission(tid,'reports') || permission(tid,'notifications') || permission(tid,'residents') || permission(tid,'payments') || permission(tid,'documents'); allow create, update: if permission(tid,'residents'); allow delete: if false; }
+      match /payments/{id} { allow read: if permission(tid,'dashboard') || permission(tid,'reports') || permission(tid,'notifications') || permission(tid,'payments'); allow create: if permission(tid,'payments'); allow update, delete: if tenantOwner(tid); }
+      match /auditLogs/{id} {
+        allow read: if tenantOwner(tid) || permission(tid,'activity');
+        allow create: if activeMember(tid)
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorRole == membership(tid).role
+          && request.resource.data.actorName == membership(tid).name;
+        allow update, delete: if false;
+      }
+      match /settings/{id} { allow read: if activeMember(tid); allow write: if tenantOwner(tid); }
+      match /food/{id} { allow read, create, update: if permission(tid,'food'); allow delete: if tenantOwner(tid); }
+      match /staff/{id} { allow read, create, update: if permission(tid,'staff'); allow delete: if tenantOwner(tid); }
+      match /maintenance/{id} { allow read, create, update: if permission(tid,'maintenance'); allow delete: if tenantOwner(tid); }
+      match /assets/{id} { allow read, create, update: if permission(tid,'assets'); allow delete: if tenantOwner(tid); }
+      match /utilities/{id} { allow read, create, update: if permission(tid,'utilities'); allow delete: if tenantOwner(tid); }
+      match /vendors/{id} { allow read, create, update: if permission(tid,'vendors'); allow delete: if tenantOwner(tid); }
+      match /calendar/{id} { allow read, create, update: if permission(tid,'calendar'); allow delete: if tenantOwner(tid); }
+      match /documents/{id} { allow read, create, update: if permission(tid,'documents'); allow delete: if tenantOwner(tid); }
+      match /notifications/{id} { allow read, create, update: if permission(tid,'notifications'); allow delete: if tenantOwner(tid); }
+      match /pushTokens/{id} {
+        allow get: if activeMember(tid) && resource.data.uid == request.auth.uid;
+        allow list: if false;
+        allow create: if activeMember(tid) && request.resource.data.uid == request.auth.uid && request.resource.data.tenantId == tid;
+        allow update: if activeMember(tid) && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && request.resource.data.tenantId == tid;
+        allow delete: if activeMember(tid) && resource.data.uid == request.auth.uid;
+      }
+      match /expenses/{id} { allow read, create, update: if permission(tid,'expenses'); allow delete: if tenantOwner(tid); }
+    }
+
+    match /platformAuditLogs/{id} {
+      allow read, create: if platformOwner();
+      allow update, delete: if false;
+    }
+
+  }
+}
