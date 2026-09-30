@@ -1,0 +1,15 @@
+{
+    "enabled":  true,
+    "version":  "1.34.15",
+    "versionCode":  24,
+    "minimumVersionCode":  1,
+    "title":  "PG Management update available",
+    "message":  "A newer secure build of PG Management is ready to install.",
+    "apkUrl":  "https://pg.picsecure.in/releases/pg-management-1.34.15.apk",
+    "releaseNotes":  [
+                         "Performance, security and feature improvements."
+                     ],
+    "mandatory":  false,
+    "sha256":  "5a847a70db8195fbd27b0145003d1ee9cb74811c8e7fc34d0db66be4be5ba9ab",
+    "publishedAt":  "2026-09-30T14:56:38.8066950Z"
+}

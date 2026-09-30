@@ -1,4 +1,4 @@
-# PG Ops R22 — Multi-PG / SaaS Foundation
+# PG Management R22 — Multi-PG / SaaS Foundation
 
 ## What changed
 - Firebase Authentication remains the identity provider.

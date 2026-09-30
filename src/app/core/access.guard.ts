@@ -33,3 +33,11 @@ export const superOwnerGuard:CanActivateFn=async()=>{
   const user=auth.user();
   return user?.platformRole==='platform_owner' ? true : router.createUrlTree(['/']);
 };
+
+export const ownerGuard:CanActivateFn=async()=>{
+  const auth=inject(AuthService),router=inject(Router);
+  await auth.waitUntilReady();
+  const user=auth.user();
+  if(!user)return router.createUrlTree(['/login']);
+  return user.role==='owner' ? true : router.createUrlTree(['/profile']);
+};

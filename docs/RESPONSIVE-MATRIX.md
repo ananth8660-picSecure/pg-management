@@ -1,4 +1,4 @@
-# PG Ops responsive contract (R5)
+# PG Management responsive contract (R5)
 
 The UI uses fluid CSS and content-driven breakpoints rather than device-specific pixel layouts.
 

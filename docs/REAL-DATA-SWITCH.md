@@ -1,6 +1,6 @@
 # Real data switch — Firebase + Cloudflare R2
 
-PG Ops pages do not call Firebase or R2 directly. Providers are selected in one file:
+PG Management pages do not call Firebase or R2 directly. Providers are selected in one file:
 
 `src/app/config/app-config.ts`
 

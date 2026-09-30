@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard, pageAccessGuard, superOwnerGuard } from './core/access.guard';
+import { authGuard, guestGuard, ownerGuard, pageAccessGuard, superOwnerGuard } from './core/access.guard';
 
 const protectedChild=(path:string,loadComponent:()=>Promise<any>,permission:string,data:any={})=>({
   path,loadComponent,canActivate:[pageAccessGuard],data:{...data,permission}
@@ -36,6 +36,7 @@ export const routes:Routes=[
       protectedChild('activity',()=>import('./pages/operations.page').then(m=>m.OperationsPage),'activity',{module:'activity'}),
       protectedChild('settings',()=>import('./pages/settings.page').then(m=>m.SettingsPage),'settings'),
       {path:'profile',loadComponent:()=>import('./pages/profile.page').then(m=>m.ProfilePage)},
+      {path:'data-vault',canActivate:[ownerGuard],loadComponent:()=>import('./pages/data-vault.page').then(m=>m.DataVaultPage)},
       {path:'platform',canActivate:[superOwnerGuard],loadComponent:()=>import('./pages/super-owner.page').then(m=>m.SuperOwnerPage)}
     ]
   },

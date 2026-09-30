@@ -1,9 +1,10 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatSelectModule } from '@angular/material/select';
 import { StoreService } from '../core/store.service';
 import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
 
-@Component({standalone:true,imports:[FormsModule],template:`
+@Component({standalone:true,imports:[FormsModule,MatSelectModule],template:`
 <div class="page-head amenities-page-head">
   <div><p class="eyebrow">OWNER • PROPERTY CONTROL</p><h1>Property Structure & Amenities</h1><p>Build the PG floor-by-floor, keep every room and bed accurate, and maintain physical inventory from one workspace.</p></div>
   <div class="head-actions"><button class="secondary-btn" (click)="blockModal.set(true)">Manage Blocks / Floors</button><button class="primary-btn" (click)="newRoom()">+ New Room</button></div>
@@ -12,8 +13,8 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
 <section class="floor-command-center">
   <div class="floor-command-copy"><span class="floor-command-kicker">COMPLETE FLOOR SETUP</span><h2>One place for the entire floor</h2><p>Select a floor to see actual rooms, beds and room assets, then maintain shared floor equipment such as washing machines, common taps and CCTV.</p></div>
   <div class="floor-command-controls">
-    <label><span>Block</span><select [(ngModel)]="commandBlock" (ngModelChange)="ensureCommandFloor()">@for(b of store.blocks();track b.id){<option [value]="b.id">{{b.name}}</option>}</select></label>
-    <label><span>Floor</span><select [(ngModel)]="commandFloor">@for(f of commandFloors();track f){<option [ngValue]="f">{{floorName(f)}}</option>}</select></label>
+    <label><span>Block</span><mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="commandBlock" (ngModelChange)="ensureCommandFloor()">@for(b of store.blocks();track b.id){<mat-option [value]="b.id">{{b.name}}</mat-option>}</mat-select></label>
+    <label><span>Floor</span><mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="commandFloor">@for(f of commandFloors();track f){<mat-option [value]="f">{{floorName(f)}}</mat-option>}</mat-select></label>
     <button class="floor-command-button" (click)="openFloorSetup(commandBlock,commandFloor)"><span>Manage Complete Floor</span><small>Inventory · Rooms · Beds</small></button>
   </div>
   <div class="floor-command-metrics">
@@ -42,9 +43,9 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
     <div class="infra-note"><b>Protected structure</b><span>Room and bed totals are calculated automatically. Occupied rooms cannot be removed accidentally.</span></div>
   </div>
   <div class="infra-filter-grid">
-    <label><span>Block</span><select [(ngModel)]="blockFilter"><option value="all">All Blocks</option>@for(b of store.blocks();track b.id){<option [value]="b.id">{{b.name}}</option>}</select></label>
-    <label><span>Floor</span><select [(ngModel)]="floorFilter"><option value="all">All Floors</option>@for(f of floorOptions();track f){<option [value]="f">{{floorName(f)}}</option>}</select></label>
-    <label><span>Room Type</span><select [(ngModel)]="typeFilter"><option value="all">All Rooms</option><option value="ac">AC Rooms</option><option value="normal">Non-AC Rooms</option></select></label>
+    <label><span>Block</span><mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="blockFilter"><mat-option value="all">All Blocks</mat-option>@for(b of store.blocks();track b.id){<mat-option [value]="b.id">{{b.name}}</mat-option>}</mat-select></label>
+    <label><span>Floor</span><mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="floorFilter"><mat-option value="all">All Floors</mat-option>@for(f of floorOptions();track f){<mat-option [value]="f">{{floorName(f)}}</mat-option>}</mat-select></label>
+    <label><span>Room Type</span><mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="typeFilter"><mat-option value="all">All Rooms</mat-option><mat-option value="ac">AC Rooms</mat-option><mat-option value="normal">Non-AC Rooms</mat-option></mat-select></label>
   </div>
 </div>
 
@@ -58,7 +59,7 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
     @if(floorFilter==='all'||+floorFilter===floor){
     <div class="infra-floor">
       <div class="infra-floor-head">
-        <div><b>{{floorName(floor)}}</b><small>{{rooms(block.id,floor).length}} rooms · {{floorBeds(block.id,floor)}} beds · {{floorAcCount(block.id,floor)}} AC · {{store.floorInventory(block.id,floor).assets.washingMachines}} washers</small></div>
+        <div><b>{{floorName(floor)}}</b><small>{{rooms(block.id,floor).length}} rooms · {{floorBeds(block.id,floor)}} beds · {{floorAcCount(block.id,floor)}} AC · {{store.floorInventory(block.id,floor).assets.washingMachines}} washers · {{store.floorInventory(block.id,floor).assets.wifiRouters}} router{{store.floorInventory(block.id,floor).assets.wifiRouters===1?'':'s'}}</small></div>
         <div class="floor-actions"><button class="floor-manage-btn" (click)="openFloorSetup(block.id,floor)">Floor Setup</button><span>{{floorAsset(block.id,floor,'fans')}} Fans</span><span>{{floorAsset(block.id,floor,'geysers')}} Geysers</span><span>{{floorAsset(block.id,floor,'taps')}} Taps</span><button class="mini-primary" (click)="newRoom(block.id,floor)">+ Room</button>@if(floor===block.floors-1){<button class="mini-danger" [disabled]="rooms(block.id,floor).length>0||block.floors<=1" (click)="askRemoveFloor(block.id,floor)">− Floor</button>}</div>
       </div>
       @if(floorDeleteKey()===block.id+':'+floor){<div class="inline-confirm"><div><b>Remove {{floorName(floor)}}?</b><small>This is allowed only when the floor is empty.</small></div><div><button class="secondary-btn compact" (click)="floorDeleteKey.set('')">Cancel</button><button class="danger-btn compact" (click)="removeFloor(block.id,floor)">Confirm Remove</button></div></div>}
@@ -67,7 +68,7 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
         <article class="infra-room-card" [class.ac-room]="room.ac">
           <div class="infra-room-title"><div><div class="room-name-line"><b>{{room.id}}</b><span class="room-type-badge" [class.ac]="room.ac">{{room.ac?'AC':'NON-AC'}}</span></div><small>{{room.beds.length}} Beds · {{vacantCount(room)}} Vacant</small></div><button class="mini-action" (click)="editRoom(room)">Manage</button></div>
           <div class="bed-manager-preview premium-bed-grid">@for(bed of room.beds;track bed.id){<span [class.occupied]="bed.status!=='vacant'"><b>{{bed.label}}</b><small>{{bedResidentName(bed.id)||'Vacant'}}</small><em>{{bedRentLabel(room,bed.id)}}</em></span>}</div>
-          <div class="room-asset-grid"><span><b>{{room.assets.fans}}</b>Fans</span><span><b>{{room.assets.geysers}}</b>Geysers</span><span><b>{{room.assets.taps}}</b>Taps</span><span><b>{{room.assets.lights}}</b>Lights</span><span><b>{{room.assets.cupboards}}</b>Cupboards</span><span><b>{{room.assets.tables}}</b>Tables</span></div>
+          <div class="room-asset-grid"><span><b>{{room.assets.fans}}</b>Fans</span><span><b>{{room.assets.geysers}}</b>Geysers</span><span><b>{{room.assets.taps}}</b>Taps</span><span><b>{{room.assets.lights}}</b>Lights</span><span><b>{{room.assets.cupboards}}</b>Cupboards</span><span><b>{{room.assets.tables}}</b>Tables</span><span><b>{{room.assets.chairs}}</b>Chairs</span><span><b>{{room.assets.tvs}}</b>TVs</span></div>
           <div class="room-meta"><span>{{room.attachedBath?'Attached Bath':'Common Bath'}}</span><span>{{room.ac?'Air Conditioned':'Standard Room'}}</span><span>{{room.sharing}} Sharing · {{vacantCount(room)}} Vacant</span></div>
         </article>
         }@empty{<button class="empty-floor-add" (click)="newRoom(block.id,floor)">＋ Add first {{typeFilter==='all'?'room':typeFilter==='ac'?'AC room':'non-AC room'}} to {{floorName(floor)}}</button>}
@@ -97,7 +98,7 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
 
     <section class="floor-setup-section room-totals-section">
       <div class="floor-section-title"><div><span class="section-orb violet"></span><div><h3>Room Inventory Totals</h3><p>Calculated automatically from every room on this floor. Edit individual rooms to change these numbers.</p></div></div><button class="secondary-btn compact" (click)="goToNewRoomFromFloor()">+ Single Room</button></div>
-      <div class="derived-asset-grid"><span><b>{{floorSetupSummary().roomAssets.fans}}</b>Fans</span><span><b>{{floorSetupSummary().roomAssets.geysers}}</b>Geysers</span><span><b>{{floorSetupSummary().roomAssets.taps}}</b>Taps</span><span><b>{{floorSetupSummary().roomAssets.lights}}</b>Lights</span><span><b>{{floorSetupSummary().roomAssets.cupboards}}</b>Cupboards</span><span><b>{{floorSetupSummary().roomAssets.tables}}</b>Tables</span><span><b>{{floorSetupSummary().roomAssets.chairs}}</b>Chairs</span></div>
+      <div class="derived-asset-grid"><span><b>{{floorSetupSummary().roomAssets.fans}}</b>Fans</span><span><b>{{floorSetupSummary().roomAssets.geysers}}</b>Geysers</span><span><b>{{floorSetupSummary().roomAssets.taps}}</b>Taps</span><span><b>{{floorSetupSummary().roomAssets.lights}}</b>Lights</span><span><b>{{floorSetupSummary().roomAssets.cupboards}}</b>Cupboards</span><span><b>{{floorSetupSummary().roomAssets.tables}}</b>Tables</span><span><b>{{floorSetupSummary().roomAssets.chairs}}</b>Chairs</span><span><b>{{floorSetupSummary().roomAssets.tvs}}</b>TVs</span></div>
     </section>
 
     <section class="floor-setup-section bulk-builder-section">
@@ -116,9 +117,9 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
 
     <section class="floor-setup-section existing-room-section">
       <div class="floor-section-title"><div><span class="section-orb amber"></span><div><h3>Existing Rooms on this Floor</h3><p>Room-by-room breakdown remains the source of truth for beds and room assets.</p></div></div><span class="live-badge amber">{{floorSetupRooms().length}} Rooms</span></div>
-      <div class="floor-room-list">@for(room of floorSetupRooms();track room.id){<article><div class="floor-room-id"><b>{{room.id}}</b><span [class.ac]="room.ac">{{room.ac?'AC':'NON-AC'}}</span></div><div class="floor-room-facts"><span>{{room.beds.length}} Beds</span><span>{{room.assets.fans}} Fans</span><span>{{room.assets.taps}} Taps</span><span>{{room.assets.geysers}} Geysers</span><span>{{room.assets.lights}} Lights</span></div><button (click)="editRoomFromFloor(room)">Edit Room</button></article>}@empty{<div class="floor-empty-state"><b>No rooms yet</b><span>Use Bulk Room Builder above or add one room manually.</span></div>}</div>
+      <div class="floor-room-list">@for(room of floorSetupRooms();track room.id){<article><div class="floor-room-id"><b>{{room.id}}</b><span [class.ac]="room.ac">{{room.ac?'AC':'NON-AC'}}</span></div><div class="floor-room-facts"><span>{{room.beds.length}} Beds</span><span>{{room.assets.fans}} Fans</span><span>{{room.assets.taps}} Taps</span><span>{{room.assets.geysers}} Geysers</span><span>{{room.assets.lights}} Lights</span><span>{{room.assets.chairs}} Chairs</span><span>{{room.assets.tvs}} TVs</span></div><button (click)="editRoomFromFloor(room)">Edit Room</button></article>}@empty{<div class="floor-empty-state"><b>No rooms yet</b><span>Use Bulk Room Builder above or add one room manually.</span></div>}</div>
     </section>
-    @if(floorError()){<div class="notice">{{floorError()}}</div>}
+    @if(floorError()){<div class="modal-alert modal-alert-error" role="alert" aria-live="assertive"><span class="modal-alert-icon">!</span><div class="modal-alert-copy"><b>Floor setup needs attention</b><span>{{floorError()}}</span></div><button type="button" class="modal-alert-close" aria-label="Dismiss message" (click)="floorError.set('')">×</button></div>}
   </div>
   <div class="modal-footer"><button class="secondary-btn" (click)="closeFloorSetup()">Close</button><button class="primary-btn" (click)="saveFloorSetup()">Save Floor Inventory</button></div>
 </section></div>
@@ -128,13 +129,13 @@ import { FloorAssets, Room, RoomAssets, SharingType } from '../core/models';
 <div class="modal-backdrop" (click)="closeRoomModal()"><section class="form-modal infra-modal modal-shell" data-native-scroll (click)="$event.stopPropagation()">
   <div class="modal-header"><div><p class="eyebrow">{{editingRoom()?'MANAGE ROOM':'NEW ROOM'}}</p><h2>{{editingRoom() ? editingRoom()!.id : 'Create Room'}}</h2><p class="modal-subtitle">Room configuration, beds and amenities stay in one protected workspace.</p></div><button class="modal-x" (click)="closeRoomModal()">×</button></div>
   <div class="modal-body">
-  @if(error()){<div class="notice modal-error-top">{{error()}}</div>}
+  @if(error()){<div class="modal-alert modal-alert-error" role="alert" aria-live="assertive"><span class="modal-alert-icon">!</span><div class="modal-alert-copy"><b>Room setup needs attention</b><span>{{error()}}</span></div><button type="button" class="modal-alert-close" aria-label="Dismiss message" (click)="error.set('')">×</button></div>}
   <div class="config-section">
     <div class="config-section-head"><div><h3>Room Configuration</h3><p>Define room type, rent and bathroom setup.</p></div>@if(editingRoom()){<span class="locked-id">Room ID locked for history safety</span>}</div>
     <div class="form-grid">
       @if(!editingRoom()){
-        <label>Block<select [(ngModel)]="form.blockId" (ngModelChange)="ensureFloorValid();validateRoomNumber()">@for(b of store.blocks();track b.id){<option [value]="b.id">{{b.name}}</option>}</select></label>
-        <label>Floor<select [(ngModel)]="form.floor" (ngModelChange)="validateRoomNumber()">@for(f of floorsForSelected();track f){<option [ngValue]="f">{{floorName(f)}}</option>}</select></label>
+        <label>Block<mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="form.blockId" (ngModelChange)="ensureFloorValid();validateRoomNumber()">@for(b of store.blocks();track b.id){<mat-option [value]="b.id">{{b.name}}</mat-option>}</mat-select></label>
+        <label>Floor<mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="form.floor" (ngModelChange)="validateRoomNumber()">@for(f of floorsForSelected();track f){<mat-option [value]="f">{{floorName(f)}}</mat-option>}</mat-select></label>
         <label>Room Number<input [(ngModel)]="form.number" (ngModelChange)="validateRoomNumber()" placeholder="101" autocomplete="off">@if(roomNumberState()){<small class="field-error">{{roomNumberState()}}</small>}@else{<small class="field-help">Unique inside the selected block.</small>}</label>
         <label>Initial Beds<input [(ngModel)]="form.sharing" type="number" min="1" placeholder="3"><small class="field-help">Any number of beds; more can be added later.</small></label>
       }@else{
@@ -167,10 +168,11 @@ export class AmenitiesPage{
  blockFilter='all';floorFilter:any='all';typeFilter='all';commandBlock='A';commandFloor=0;
  roomModal=signal(false);blockModal=signal(false);floorSetupModal=signal(false);editingRoom=signal<Room|null>(null);error=signal('');roomSaving=signal(false);roomNumberState=signal('');floorError=signal('');bulkMessage=signal('');bulkSaving=signal(false);
  floorSetupBlock='A';floorSetupFloor=0;newBlockName='';newBlockFloors=4;roomDeleteConfirm=signal(false);floorDeleteKey=signal('');
- assetFields:{key:keyof RoomAssets,label:string}[]=[{key:'fans',label:'Fans'},{key:'geysers',label:'Geysers'},{key:'taps',label:'Taps'},{key:'lights',label:'Lights'},{key:'cupboards',label:'Cupboards'},{key:'tables',label:'Tables'},{key:'chairs',label:'Chairs'}];
+ assetFields:{key:keyof RoomAssets,label:string}[]=[{key:'fans',label:'Fans'},{key:'geysers',label:'Geysers'},{key:'taps',label:'Taps'},{key:'lights',label:'Lights'},{key:'cupboards',label:'Cupboards'},{key:'tables',label:'Tables'},{key:'chairs',label:'Chairs'},{key:'tvs',label:'TVs'}];
  floorAssetFields:{key:keyof FloorAssets,label:string,help:string}[]=[
   {key:'washingMachines',label:'Washing Machines',help:'Common laundry machines'},
   {key:'waterPurifiers',label:'Water Purifiers',help:'RO / drinking water units'},
+  {key:'wifiRouters',label:'Wi-Fi Routers',help:'Dedicated Wi-Fi router(s) installed for this floor'},
   {key:'commonFans',label:'Common Fans',help:'Corridor / hall fans'},
   {key:'commonTaps',label:'Common Taps',help:'Shared wash-area taps'},
   {key:'commonGeysers',label:'Common Geysers',help:'Shared hot-water units'},
@@ -182,9 +184,9 @@ export class AmenitiesPage{
  ];
  form:any;floorForm:any;bulkForm:any;
  constructor(public store:StoreService){this.commandBlock=this.store.blocks()[0]?.id||'A';this.floorSetupBlock=this.commandBlock;this.form=this.blankForm();this.floorForm=this.blankFloorForm();this.bulkForm=this.blankBulkForm();}
- blankForm(){return{blockId:this.store?.blocks?.()?.[0]?.id||'A',floor:0,number:'',sharing:3 as SharingType,rent:8500,attachedBath:true,ac:false,assets:{fans:2,geysers:1,taps:2,lights:3,cupboards:3,tables:0,chairs:0} as RoomAssets};}
- blankFloorForm(){return{assets:{washingMachines:0,waterPurifiers:0,commonFans:0,commonTaps:0,commonGeysers:0,commonLights:0,cctv:0,fireExtinguishers:0,commonToilets:0,shoeRacks:0} as FloorAssets,notes:''};}
- blankBulkForm(){return{count:4,startNumber:101,beds:3,rent:8500,ac:false,attachedBath:true,assets:{fans:2,geysers:1,taps:2,lights:3,cupboards:3,tables:0,chairs:0} as RoomAssets};}
+ blankForm(){return{blockId:this.store?.blocks?.()?.[0]?.id||'A',floor:0,number:'',sharing:3 as SharingType,rent:8500,attachedBath:true,ac:false,assets:{fans:2,geysers:1,taps:2,lights:3,cupboards:3,tables:0,chairs:0,tvs:0} as RoomAssets};}
+ blankFloorForm(){return{assets:{washingMachines:0,waterPurifiers:0,wifiRouters:1,commonFans:0,commonTaps:0,commonGeysers:0,commonLights:0,cctv:0,fireExtinguishers:0,commonToilets:0,shoeRacks:0} as FloorAssets,notes:''};}
+ blankBulkForm(){return{count:4,startNumber:101,beds:3,rent:8500,ac:false,attachedBath:true,assets:{fans:2,geysers:1,taps:2,lights:3,cupboards:3,tables:0,chairs:0,tvs:0} as RoomAssets};}
  floorName(f:number){return f===0?'Ground Floor':`${f}${f===1?'st':f===2?'nd':f===3?'rd':'th'} Floor`;}
  floors(b:any){return Array.from({length:b.floors},(_,i)=>i);}
  floorsForSelected(){const b=this.store.blocks().find(x=>x.id===this.form.blockId);return Array.from({length:b?.floors||1},(_,i)=>i);}

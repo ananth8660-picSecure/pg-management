@@ -28,10 +28,13 @@ export class AuthService {
 
   constructor(private fb:FirebaseService){
     if(!fb.configured){ this.finishReady(); return; }
+    // Keep the Firebase session on this device until the user explicitly signs out
+    // (or an Owner/platform security action deliberately revokes access).
+    void setPersistence(fb.auth!,browserLocalPersistence).catch(error=>console.warn('[PG Management Auth] Unable to enforce local session persistence.',error));
     // Do not expose the guest/login route while Firebase is still restoring a
     // persisted browser session. The router guards wait for this same signal.
     const startupWatchdog=setTimeout(()=>{
-      if(!this.ready()) console.warn('[PG Ops Auth] Session restoration is taking longer than expected; still waiting for Firebase instead of flashing the login screen.');
+      if(!this.ready()) console.warn('[PG Management Auth] Session restoration is taking longer than expected; still waiting for Firebase instead of flashing the login screen.');
     },8000);
     try{
       onAuthStateChanged(fb.auth!, async u=>{
@@ -45,17 +48,17 @@ export class AuthService {
           this.user.set(mapped.session);this.tenant.set(mapped.tenant);
           this.watchSession(u.uid,mapped.session.tenantId,mapped.tenant.forceLogoutAt||'');
         } catch(e){
-          console.error('[PG Ops Auth]',e);
+          console.error('[PG Management Auth]',e);
           this.user.set(null);this.tenant.set(null);
         } finally { clearTimeout(startupWatchdog); this.finishReady(); }
       }, error=>{
         clearTimeout(startupWatchdog);
-        console.error('[PG Ops Auth state listener]',error);
+        console.error('[PG Management Auth state listener]',error);
         this.user.set(null);this.tenant.set(null);this.finishReady();
       });
     }catch(error){
       clearTimeout(startupWatchdog);
-      console.error('[PG Ops Auth initialization]',error);
+      console.error('[PG Management Auth initialization]',error);
       this.user.set(null);this.tenant.set(null);this.finishReady();
     }
   }
@@ -73,6 +76,12 @@ export class AuthService {
   }
 
   private clearSubscriptions(){for(const u of this.unsubs)u();this.unsubs=[];}
+
+  private markFreshCredentialLogin(uid:string){
+    if(typeof window==='undefined')return;
+    try{sessionStorage.setItem(`pgops-fresh-login:${uid}`,String(Date.now()));}catch{}
+    window.dispatchEvent(new Event('pgops-fresh-login'));
+  }
 
   private watchSession(uid:string,tenantId:string,initialForceLogoutAt=''){
     const profileRef=doc(this.fb.db!,'users',uid);
@@ -107,6 +116,7 @@ export class AuthService {
       if(clean==='owner@demo.local' && password==='Owner@123') this.user.set({uid:'demo-owner',email:clean,name:'Ananth Kumar',role:'owner',permissions:[],active:true,tenantId:'demo',tenantIds:['demo'],platformRole:'platform_owner',demo:true});
       else if(clean==='manager@demo.local' && password==='Manager@123') this.user.set({uid:'demo-manager',email:clean,name:'PG Manager',role:'manager',permissions:DEFAULT_MANAGER_PERMISSIONS,active:true,tenantId:'demo',tenantIds:['demo'],platformRole:'tenant_user',demo:true});
       else throw new Error('Invalid demo credentials.');
+      this.markFreshCredentialLogin(this.user()!.uid);
       return;
     }
     try{
@@ -114,6 +124,7 @@ export class AuthService {
       const credential=await signInWithEmailAndPassword(this.fb.auth!,clean,password);
       const mapped=await this.mapUser(credential.user);
       this.user.set(mapped.session);this.tenant.set(mapped.tenant);this.clearSubscriptions();this.watchSession(credential.user.uid,mapped.session.tenantId,mapped.tenant.forceLogoutAt||'');
+      this.markFreshCredentialLogin(credential.user.uid);
     } catch(err){
       if(this.fb.auth?.currentUser) await signOut(this.fb.auth).catch(()=>undefined);
       if(err instanceof Error && !('code' in err)) throw err;
@@ -121,7 +132,17 @@ export class AuthService {
     }
   }
 
-  async logout(){this.clearSubscriptions();if(this.fb.configured)await signOut(this.fb.auth!);else this.user.set(null);}
+  async logout(){
+    if(typeof window!=='undefined')window.dispatchEvent(new Event('pgops-secure-ui-reset'));
+    this.clearSubscriptions();
+    // Clear local session signals immediately so protected UI cannot remain visible
+    // while Firebase finishes propagating its auth-state callback.
+    this.user.set(null);
+    this.tenant.set(null);
+    if(this.fb.configured){
+      try{await signOut(this.fb.auth!);}catch(error){console.warn('[PG Management Auth] Firebase sign-out cleanup reported an error after the local session was cleared.',error);}
+    }
+  }
 
   async verifySuperOwnerPassword(password:string){
     const session=this.user(),current=this.fb.auth?.currentUser;
@@ -301,6 +322,7 @@ export class AuthService {
     if(typeof input.shortName==='string')clean.shortName=input.shortName.trim();
     if(typeof input.city==='string')clean.city=input.city.trim();
     if(input.logo)clean.logo=input.logo;
+    if(input.receiptEmail)clean.receiptEmail=input.receiptEmail;
     if(actor.demo||!this.fb.configured||!this.fb.db){this.tenant.update(t=>t?{...t,...clean}:t);return;}
     const updatedAt=new Date().toISOString();
     await setDoc(doc(this.fb.db,'tenants',actor.tenantId),{...clean,updatedAt,updatedBy:actor.uid},{merge:true});
@@ -325,13 +347,13 @@ export class AuthService {
     if(!snap.exists()){await this.bootstrapKnownAccount(u);snap=await getDoc(profileRef);}
     if(snap.exists() && u.uid===APP_CONFIG.platform.platformOwnerUid && snap.data()['platformRole']!=='platform_owner'){await this.promoteConfiguredCreator(u);snap=await getDoc(profileRef);}
     if(!snap.exists())throw new Error(`Firebase Authentication succeeded, but this account has not been assigned to a PG yet. Ask the Super Owner/PG Owner to add ${u.email||'this user'} from Profile & Access.`);
-    const p:any=snap.data();if(p.active===false)throw new Error('This PG Ops account is disabled.');
+    const p:any=snap.data();if(p.active===false)throw new Error('This PG Management account is disabled.');
     const tenantIds=Array.isArray(p.tenantIds)?p.tenantIds.map(String):[];const tenantId=forcedTenantId||String(p.activeTenantId||tenantIds[0]||'');if(!tenantId)throw new Error('No PG workspace is assigned to this account.');
     const [memberSnap,tenantSnap]=await Promise.all([getDoc(doc(this.fb.db!,'tenants',tenantId,'members',u.uid)),getDoc(doc(this.fb.db!,'tenants',tenantId))]);
     if(!memberSnap.exists())throw new Error('Your account exists, but access to this PG workspace has not been assigned.');if(!tenantSnap.exists())throw new Error('The assigned PG workspace no longer exists.');
     const platformRole:PlatformRole=p.platformRole==='platform_owner'?'platform_owner':'tenant_user';
     const tenant=this.toTenant(tenantSnap.id,tenantSnap.data());
-    if(!tenant.active && platformRole!=='platform_owner')throw new Error(`This PG workspace is currently inactive. ${tenant.suspendedReason||'Contact the PG Ops provider for access.'}`);
+    if(!tenant.active && platformRole!=='platform_owner')throw new Error(`This PG workspace is currently inactive. ${tenant.suspendedReason||'Contact the PG Management provider for access.'}`);
     const m:any=memberSnap.data();if(m.active===false)throw new Error('Your access to this PG is disabled by its Owner.');const role:Role=m.role==='owner'?'owner':m.role==='manager'?'manager':(()=>{throw new Error('Invalid PG membership role.');})();
     return{session:{uid:u.uid,email:String(p.email||u.email||''),name:String(m.name||p.name||u.email||'User'),role,permissions:Array.isArray(m.permissions)?m.permissions:[],active:true,tenantId,tenantIds:[...new Set([...tenantIds,tenantId])],platformRole},tenant};
   }
@@ -357,7 +379,7 @@ export class AuthService {
     await setDoc(doc(this.fb.db!,'tenants',tenantId,'members',u.uid),{uid:u.uid,email,name:APP_CONFIG.platform.platformOwnerName,role:'owner',active:true,permissions:[],createdAt:now,updatedAt:now,createdBy:u.uid,updatedBy:u.uid,tenantId});
   }
 
-  private toTenant(id:string,d:any):Tenant{return{id,slug:String(d.slug||id),name:String(d.name||'PG Workspace'),shortName:String(d.shortName||d.name||'PG Ops'),city:String(d.city||''),logo:d.logo,active:d.active!==false,createdAt:String(d.createdAt||''),createdBy:String(d.createdBy||''),ownerUid:String(d.ownerUid||''),ownerName:String(d.ownerName||''),ownerEmail:String(d.ownerEmail||''),customerName:String(d.customerName||''),customerPhone:String(d.customerPhone||''),soldAt:String(d.soldAt||''),commercialNote:String(d.commercialNote||''),memberCount:Number(d.memberCount||0),activeMemberCount:Number(d.activeMemberCount||0),suspendedReason:String(d.suspendedReason||''),forceLogoutAt:String(d.forceLogoutAt||''),updatedAt:String(d.updatedAt||''),updatedBy:String(d.updatedBy||'')};}
+  private toTenant(id:string,d:any):Tenant{return{id,slug:String(d.slug||id),name:String(d.name||'PG Workspace'),shortName:String(d.shortName||d.name||'PG Management'),city:String(d.city||''),logo:d.logo,active:d.active!==false,createdAt:String(d.createdAt||''),createdBy:String(d.createdBy||''),ownerUid:String(d.ownerUid||''),ownerName:String(d.ownerName||''),ownerEmail:String(d.ownerEmail||''),customerName:String(d.customerName||''),customerPhone:String(d.customerPhone||''),soldAt:String(d.soldAt||''),commercialNote:String(d.commercialNote||''),memberCount:Number(d.memberCount||0),activeMemberCount:Number(d.activeMemberCount||0),suspendedReason:String(d.suspendedReason||''),forceLogoutAt:String(d.forceLogoutAt||''),updatedAt:String(d.updatedAt||''),updatedBy:String(d.updatedBy||'')};}
   private slug(v:string){return v.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,36)||'pg';}
 
   private friendlyCallableError(err:any,fallback:string){

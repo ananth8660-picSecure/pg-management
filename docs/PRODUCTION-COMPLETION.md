@@ -1,4 +1,4 @@
-# PG Ops production completion
+# PG Management production completion
 
 The application code is provider-ready. The remaining deployment inputs are credentials and infrastructure owned by the operator.
 

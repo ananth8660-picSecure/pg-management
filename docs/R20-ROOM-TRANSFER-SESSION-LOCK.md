@@ -15,7 +15,7 @@
 - Clicking the profile no longer signs out directly. It opens an account menu with **Lock Workspace** and **Sign Out**.
 
 ## App lock
-- On first successful login per user/device, PG Ops asks for a 4–6 digit device PIN.
+- On first successful login per user/device, PG Management asks for a 4–6 digit device PIN.
 - Default idle timeout: 10 minutes.
 - Inactivity locks the UI but does not sign out from Firebase.
 - Returning after inactivity requires the PIN and resumes the same authenticated session.

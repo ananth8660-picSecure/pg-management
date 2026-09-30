@@ -1,0 +1,21 @@
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+if (!keystorePropertiesFile.exists()) {
+    throw new GradleException("Missing android/keystore.properties. Run npm run android:release:prepare")
+}
+def keystoreProperties = new Properties()
+keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+android {
+    signingConfigs {
+        pgopsRelease {
+            storeFile rootProject.file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.pgopsRelease
+        }
+    }
+}

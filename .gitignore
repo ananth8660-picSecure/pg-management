@@ -1,49 +1,39 @@
-# Dependencies
+
+# Android production signing identity - never commit private key/passwords
+android/*.jks
+android/*.keystore
+android/keystore.properties
+config/firebase/production/google-services.json
+
+# Hosted Android release binaries must never be build inputs.
+# They are copied directly to dist during release to prevent APK-inside-APK growth.
+public/releases/*.apk
+release/*.apk
 node_modules/
 functions/node_modules/
 r2-worker/node_modules/
 
-# Angular build/cache
-.angular/
 dist/
-coverage/
-out-tsc/
-
-# Firebase local state / emulator output
+.angular/
 .firebase/
-firebase-debug.log
-firebase-debug.*.log
+
+android/.gradle/
+android/build/
+android/app/build/
+**/build/
+
+release/
+*.apk
+*.aab
+
+*.log
 firestore-debug.log
-ui-debug.log
 
-# Cloudflare Wrangler local state and secrets
-.wrangler/
-.dev.vars
-r2-worker/.dev.vars
-
-# Environment / credentials / private keys
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-service-account*.json
-*serviceAccount*.json
-firebase-adminsdk*.json
-
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Release archives / local backups
 *.zip
-*.bak
 *.tmp
+
+functions/.env*
+!functions/.env.mana-pg.example
+
+resend-key.txt
+classes.txt
