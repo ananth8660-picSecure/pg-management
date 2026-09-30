@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "152236952701",
+    "firebase_url": "https://mana-pg-default-rtdb.firebaseio.com",
+    "project_id": "mana-pg",
+    "storage_bucket": "mana-pg.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:152236952701:android:2fb4f76c849e4f7f00b514",
+        "android_client_info": {
+          "package_name": "in.picsecure.pgops"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "152236952701-d72ibnd629if52a8rmhv5t71sac6qrpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyURUB9t5gRs2PgPxibDqdLRcpLA5WSL8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "152236952701-d72ibnd629if52a8rmhv5t71sac6qrpd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

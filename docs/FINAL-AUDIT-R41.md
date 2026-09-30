@@ -1,4 +1,4 @@
-# PG Ops — Final Production Audit Report (R41)
+# PG Management — Final Production Audit Report (R41)
 
 **Audit scope:** Angular application, navigation/role guards, Firebase Authentication, Firestore data/rules, Cloud Functions, FCM web push, Cloudflare R2 encrypted-file Worker, UI labels/forms/modals, sample/demo data, and deploy configuration.
 
@@ -29,7 +29,7 @@
 
 **Not zero-knowledge encrypted at the application field level:** structured Firestore data such as names, email addresses, mobile numbers, room/rent/payment fields, roles, and audit metadata. These fields need to remain queryable for login, access rules, search, reports and operations. They are protected by HTTPS/TLS in transit, Google/Firebase encryption at rest, Firebase Authentication and Firestore Security Rules.
 
-**Passwords:** Firebase passwords are not stored in Firestore by PG Ops. Temporary passwords are sent over TLS to a protected callable Cloud Function and passed to Firebase Admin Auth. Super Owner / Owner verification passwords are used only for Firebase re-authentication and are not persisted by the app.
+**Passwords:** Firebase passwords are not stored in Firestore by PG Management. Temporary passwords are sent over TLS to a protected callable Cloud Function and passed to Firebase Admin Auth. Super Owner / Owner verification passwords are used only for Firebase re-authentication and are not persisted by the app.
 
 **Aadhaar:** Firestore stores only the configured last-four digits; the proof file is stored encrypted in R2.
 

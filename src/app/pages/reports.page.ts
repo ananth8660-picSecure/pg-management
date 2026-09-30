@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatSelectModule } from '@angular/material/select';
 import { StoreService } from '../core/store.service';
 
 type ReportKey='occupancy'|'vacancy'|'rent'|'residents'|'amenities';
 
 @Component({
   standalone:true,
-  imports:[CommonModule,FormsModule],
+  imports:[CommonModule,FormsModule,MatSelectModule],
   template:`
   <div class="page-head reports-head">
     <div>
@@ -41,14 +42,14 @@ type ReportKey='occupancy'|'vacancy'|'rent'|'residents'|'amenities';
       <div class="report-filters">
         <input [(ngModel)]="query" placeholder="Search report...">
         @if(active()!=='residents'){
-          <select [(ngModel)]="blockFilter"><option value="all">All blocks</option>@for(b of store.blocks();track b.id){<option [value]="b.id">{{b.name}}</option>}</select>
+          <mat-select class="pg-premium-select" panelClass="pg-premium-select-panel" [(ngModel)]="blockFilter"><mat-option value="all">All blocks</mat-option>@for(b of store.blocks();track b.id){<mat-option [value]="b.id">{{b.name}}</mat-option>}</mat-select>
         }
       </div>
     </div>
 
     @if(rows().length){
-      <div class="table-wrap report-table"><table><thead><tr>@for(c of columns();track c.key){<th>{{c.label}}</th>}</tr></thead><tbody>
-        @for(row of rows();track $index){<tr>@for(c of columns();track c.key){<td><span [class]="c.key==='status'?'status '+statusClass(row[c.key]):''">{{row[c.key]}}</span></td>}</tr>}
+      <div class="table-wrap report-table"><table class="responsive-card-table reports-responsive-table"><thead><tr>@for(c of columns();track c.key){<th>{{c.label}}</th>}</tr></thead><tbody>
+        @for(row of rows();track $index){<tr>@for(c of columns();track c.key){<td [attr.data-label]="c.label"><span [class]="c.key==='status'?'status '+statusClass(row[c.key]):''">{{row[c.key]}}</span></td>}</tr>}
       </tbody></table></div>
     } @else {
       <div class="premium-empty"><div>⌁</div><h3>No matching report rows</h3><p>Try a different search or block filter.</p></div>

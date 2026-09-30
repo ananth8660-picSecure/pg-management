@@ -1,4 +1,4 @@
-/* PG Ops Firebase Cloud Messaging service worker. Firebase web config contains public identifiers, not secrets. */
+/* PG Management Firebase Cloud Messaging service worker. Firebase web config contains public identifiers, not secrets. */
 importScripts('https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/11.10.0/firebase-messaging-compat.js');
 
@@ -11,7 +11,7 @@ firebase.initializeApp({
 });
 const messaging=firebase.messaging();
 messaging.onBackgroundMessage(payload=>{
-  const title=payload.notification?.title||payload.data?.title||'PG Ops';
+  const title=payload.notification?.title||payload.data?.title||'PG Management';
   const options={
     body:payload.notification?.body||payload.data?.body||'A new PG update is available.',
     icon:'/favicon.svg',badge:'/favicon.svg',tag:payload.data?.tag||'pg-ops-update',

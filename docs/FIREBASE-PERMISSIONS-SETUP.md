@@ -40,4 +40,4 @@ Do not use the email address as the document ID. Use the Authentication UID.
 
 ## Why this is required
 
-Firebase Authentication proves who signed in. The `users/{uid}` Firestore document tells PG Ops what that account is allowed to do. Keeping the two separate prevents a signed-in client from assigning itself the Owner role.
+Firebase Authentication proves who signed in. The `users/{uid}` Firestore document tells PG Management what that account is allowed to do. Keeping the two separate prevents a signed-in client from assigning itself the Owner role.

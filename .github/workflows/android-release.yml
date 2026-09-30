@@ -1,0 +1,185 @@
+name: Android Release APK + App Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version name (example 1.25.1)'
+        required: true
+        type: string
+      mandatory:
+        description: 'Force older builds to update'
+        required: true
+        default: false
+        type: boolean
+      notes:
+        description: 'Release notes'
+        required: false
+        default: 'Performance, security and feature improvements.'
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be MAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$((GITHUB_RUN_NUMBER + 1000))" >> "$GITHUB_OUTPUT"
+          if [[ "${{ inputs.mandatory }}" == "true" ]]; then echo "mandatory=true" >> "$GITHUB_OUTPUT"; else echo "mandatory=false" >> "$GITHUB_OUTPUT"; fi
+          NOTES='${{ inputs.notes }}'
+          if [[ -z "$NOTES" ]]; then NOTES='Performance, security and feature improvements.'; fi
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build Angular
+        run: npm run build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Generate Android icon and splash assets
+        run: npx @capacitor/assets generate --android
+
+      - name: Set Android version
+        shell: bash
+        run: |
+          sed -i -E 's/versionCode[[:space:]]+[0-9]+/versionCode ${{ steps.meta.outputs.version_code }}/' android/app/build.gradle
+          sed -i -E 's/versionName[[:space:]]+"[^"]+"/versionName "${{ steps.meta.outputs.version }}"/' android/app/build.gradle
+
+      - name: Restore production signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$KEYSTORE_B64" || (echo "Missing ANDROID_KEYSTORE_BASE64 secret" && exit 1)
+          echo "$KEYSTORE_B64" | base64 --decode > android/pgops-release.jks
+          cat > android/keystore.properties <<PROPS
+          storeFile=pgops-release.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          PROPS
+          cat > android/release-signing.gradle <<'GRADLE'
+          def keystorePropertiesFile = rootProject.file("keystore.properties")
+          def keystoreProperties = new Properties()
+          keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          android {
+              signingConfigs {
+                  pgopsRelease {
+                      storeFile rootProject.file(keystoreProperties['storeFile'])
+                      storePassword keystoreProperties['storePassword']
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                  }
+              }
+              buildTypes {
+                  release { signingConfig signingConfigs.pgopsRelease }
+              }
+          }
+          GRADLE
+          echo "apply from: '../release-signing.gradle'" >> android/app/build.gradle
+
+      - name: Build signed release APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleRelease
+
+      - name: Prepare hosted APK and update manifest
+        shell: bash
+        run: |
+          VERSION='${{ steps.meta.outputs.version }}'
+          CODE='${{ steps.meta.outputs.version_code }}'
+          APK_NAME="pg-ops-${VERSION}.apk"
+          mkdir -p "dist/pg-ops-premium/browser/releases"
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/pg-ops-premium/browser/releases/$APK_NAME"
+          HASH=$(sha256sum "dist/pg-ops-premium/browser/releases/$APK_NAME" | awk '{print $1}')
+          MANDATORY='${{ steps.meta.outputs.mandatory }}'
+          if [[ "$MANDATORY" == "true" ]]; then MIN_CODE="$CODE"; else MIN_CODE=1; fi
+          node - <<NODE
+          const fs=require('fs');
+          const m={
+            enabled:true,
+            version:process.env.VERSION,
+            versionCode:Number(process.env.CODE),
+            minimumVersionCode:Number(process.env.MIN_CODE),
+            title:'PG Management update available',
+            message:'A newer secure build of PG Management is ready to install.',
+            apkUrl:'https://mana-pg.web.app/releases/'+process.env.APK_NAME,
+            releaseNotes:[process.env.NOTES || 'Performance, security and feature improvements.'],
+            mandatory:process.env.MANDATORY==='true',
+            sha256:process.env.HASH,
+            publishedAt:new Date().toISOString()
+          };
+          fs.writeFileSync('dist/pg-ops-premium/browser/app-release.json',JSON.stringify(m,null,2)+'\n');
+          NODE
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          CODE: ${{ steps.meta.outputs.version_code }}
+          MIN_CODE: ${{ steps.meta.outputs.mandatory == 'true' && steps.meta.outputs.version_code || '1' }}
+          APK_NAME: pg-ops-${{ steps.meta.outputs.version }}.apk
+          NOTES: ${{ steps.meta.outputs.notes }}
+          MANDATORY: ${{ steps.meta.outputs.mandatory }}
+          HASH: ${{ hashFiles('android/app/build/outputs/apk/release/app-release.apk') }}
+
+      - name: Deploy APK + manifest to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MANA_PG }}
+          projectId: mana-pg
+          channelId: live
+
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PG-Management-${{ steps.meta.outputs.version }}-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/app-release.apk

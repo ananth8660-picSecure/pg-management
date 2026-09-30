@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "mana-pg"
+    "default": "mana-pg",
+    "production": "mana-pg"
   }
 }

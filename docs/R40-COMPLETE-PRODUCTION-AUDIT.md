@@ -1,4 +1,4 @@
-# PG Ops R40 — Complete Production Audit & Gap Report
+# PG Management R40 — Complete Production Audit & Gap Report
 
 Date: 24 Sep 2026
 

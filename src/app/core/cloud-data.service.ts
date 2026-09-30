@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, runTransaction, setDoc, serverTimestamp, Unsubscribe } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, serverTimestamp, Unsubscribe, where } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { FirebaseService } from './firebase.service';
 import { AuthService } from './auth.service';
 import { AuditLog, Block, FloorInventory, Payment, Resident, Room, SharingRate } from './models';
@@ -9,6 +10,12 @@ export class CloudDataService{
   readonly configured:boolean;
   constructor(private fb:FirebaseService,private auth:AuthService){this.configured=fb.configured;}
   private tenantId(){const id=this.auth.user()?.tenantId;if(!id)throw new Error('No active PG workspace.');return id;}
+  /** Owner-only: emails ONE rent reminder to a resident whose rent is due, overdue or partially paid. */
+  async sendRentReminderEmail(residentId:string):Promise<{to:string;amount:number;status:string}>{
+    if(!this.fb.configured||!this.fb.app)throw new Error('Reminder emails work only when this PG is connected to the cloud.');
+    try{const call=httpsCallable(getFunctions(this.fb.app,'asia-south1'),'sendRentReminderEmail');const res:any=await call({tenantId:this.tenantId(),residentId});return res.data;}
+    catch(e:any){throw new Error(e?.message||'Unable to send the reminder email.');}
+  }
   private col(name:string){return collection(this.fb.db!,'tenants',this.tenantId(),name);}
   private ref(name:string,id:string){return doc(this.fb.db!,'tenants',this.tenantId(),name,id);}
 
@@ -17,6 +24,21 @@ export class CloudDataService{
     if(!this.fb.configured)return()=>{};
     return onSnapshot(this.col(name),snap=>callback(snap.docs.map(d=>({...d.data(),id:d.id} as T))),err=>onError?.(err));
   }
+
+  watchNotifications<T=any>(callback:(rows:T[])=>void,onError?:(error:any)=>void):Unsubscribe{
+    if(!this.fb.configured)return()=>{};
+    const u=this.auth.user();
+    const source=u?.role==='owner'?this.col('notifications'):query(this.col('notifications'),where('ownerOnly','==',false),where('type','==','Rent'));
+    return onSnapshot(source,snap=>callback(snap.docs.map(d=>({...d.data(),id:d.id} as T))),err=>onError?.(err));
+  }
+  async loadNotificationRows<T=any>():Promise<T[]>{
+    if(!this.fb.configured)return[];
+    const u=this.auth.user();
+    const source=u?.role==='owner'?this.col('notifications'):query(this.col('notifications'),where('ownerOnly','==',false),where('type','==','Rent'));
+    const snap=await getDocs(source);
+    return snap.docs.map(d=>({...d.data(),id:d.id} as T));
+  }
+
   watchDocument<T=any>(name:string,id:string,callback:(value:T|null)=>void,onError?:(error:any)=>void):Unsubscribe{
     if(!this.fb.configured)return()=>{};
     return onSnapshot(this.ref(name,id),snap=>callback(snap.exists()?({...snap.data(),id:snap.id} as T):null),err=>onError?.(err));
@@ -101,7 +123,7 @@ export class CloudDataService{
       const today=new Date().toISOString().slice(0,10),stayId=`ST-${Date.now()}`;let updatedSource:Room,updatedTarget:Room;
       if(sourceRoom.id===targetRoom.id){const updated:Room={...sourceRoom,beds:sourceRoom.beds.map(b=>b.id===current.bedId?{...b,status:'vacant',residentId:undefined}:b.id===targetBedId?{...b,status:'occupied',residentId}:b)};updatedSource=updated;updatedTarget=updated;tx.set(sourceRef,updated,{merge:true});}
       else{updatedSource={...sourceRoom,beds:sourceRoom.beds.map(b=>b.id===current.bedId?{...b,status:'vacant',residentId:undefined}:b)};updatedTarget={...targetRoom,beds:targetRoom.beds.map(b=>b.id===targetBedId?{...b,status:'occupied',residentId}:b)};tx.set(sourceRef,updatedSource,{merge:true});tx.set(targetRef,updatedTarget,{merge:true});}
-      const updatedResident:Resident={...resident,currentStayId:stayId,monthlyRent:applyTargetRent?targetRoom.rent:resident.monthlyRent,stays:[...resident.stays.map(s=>s.active?{...s,active:false,to:today}:s),{id:stayId,roomId:targetRoomId,bedId:targetBedId,from:today,active:true,reason:'transfer'}]};tx.set(residentRef,updatedResident,{merge:true});return{resident:updatedResident,sourceRoom:updatedSource,targetRoom:updatedTarget,fromRoomId:current.roomId,fromBedId:current.bedId};
+      const updatedResident:Resident={...resident,currentStayId:stayId,monthlyRent:applyTargetRent?targetRoom.rent:resident.monthlyRent,standardMonthlyRent:applyTargetRent?targetRoom.rent:(resident.standardMonthlyRent||resident.monthlyRent),stays:[...resident.stays.map(s=>s.active?{...s,active:false,to:today}:s),{id:stayId,roomId:targetRoomId,bedId:targetBedId,from:today,active:true,reason:'transfer'}]};tx.set(residentRef,updatedResident,{merge:true});return{resident:updatedResident,sourceRoom:updatedSource,targetRoom:updatedTarget,fromRoomId:current.roomId,fromBedId:current.bedId};
     });
   }
 
@@ -125,6 +147,18 @@ export class CloudDataService{
     if(!allowed.includes(name))throw new Error('Unsupported operations module.');
     await deleteDoc(this.ref(name,id));
   }
+  async markStaffSalaryPaidAtomic(staffId:string,staffRow:Record<string,any>,dueMonth:string,amount:number){
+    if(!this.fb.configured)return;
+    const paidDate=new Date().toISOString().slice(0,10),expenseId=`SALARY-${dueMonth}-${staffId}`,history=Array.isArray(staffRow['salaryHistory'])?staffRow['salaryHistory'].slice(-23):[];
+    const salaryEntry={month:dueMonth,amount:Number(amount)||0,paidDate,status:'Paid'};
+    await runTransaction(this.fb.db!,async tx=>{
+      const staffRef=this.ref('staff',staffId),snap=await tx.get(staffRef);if(!snap.exists())throw new Error('Staff record no longer exists.');
+      const current=snap.data() as any,currentHistory=Array.isArray(current.salaryHistory)?current.salaryHistory.slice(-23):history;
+      tx.set(staffRef,{salaryLastPaidMonth:dueMonth,salaryLastPaidDate:paidDate,salaryHistory:[...currentHistory.filter((x:any)=>String(x?.month||'')!==dueMonth),salaryEntry],updatedAt:serverTimestamp()},{merge:true});
+      tx.set(this.ref('expenses',expenseId),{id:expenseId,date:paidDate,category:'Staff Salary',description:`${staffRow['name']||'Staff'} · ${dueMonth} salary`,amount:Number(amount)||0,status:'Paid',staffId,staffName:String(staffRow['name']||'Staff'),salaryMonth:dueMonth,source:'staff-payroll',updatedAt:serverTimestamp()},{merge:true});
+    });
+  }
+
   async exportTenantSnapshot(){
     if(!this.fb.configured)return{};
     const names=['blocks','rooms','floorInventories','residents','payments','food','staff','maintenance','assets','utilities','expenses','vendors','calendar','documents','notifications','auditLogs'];
@@ -132,7 +166,12 @@ export class CloudDataService{
     return Object.fromEntries(entries);
   }
 
-  async savePayment(v:any){if(this.fb.configured)await setDoc(this.ref('payments',v.id),{...v,createdAt:serverTimestamp()});}
+  private firestoreSafe<T>(value:T):T{
+    if(Array.isArray(value))return value.map(v=>this.firestoreSafe(v)).filter(v=>v!==undefined) as T;
+    if(value&&typeof value==='object'&&!(value instanceof Date)){const out:Record<string,unknown>={};for(const [k,v] of Object.entries(value as Record<string,unknown>)){if(v!==undefined)out[k]=this.firestoreSafe(v);}return out as T;}
+    return value;
+  }
+  async savePayment(v:any){if(this.fb.configured)await setDoc(this.ref('payments',v.id),{...this.firestoreSafe(v),createdAt:serverTimestamp()});}
   async saveManagerAccess(managerAccess:string[]){if(this.fb.configured)await setDoc(this.ref('settings','app'),{managerAccess,updatedAt:serverTimestamp()},{merge:true});}
   async saveSharingRates(sharingRates:SharingRate[]){if(this.fb.configured)await setDoc(this.ref('settings','app'),{sharingRates,updatedAt:serverTimestamp()},{merge:true});}
   async audit(actor:any,action:string,module:string,details:any={}):Promise<AuditLog>{

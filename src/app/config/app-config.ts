@@ -9,14 +9,14 @@ export const APP_CONFIG = {
   dataProvider: 'firebase' as DataProvider,
   fileProvider: 'r2' as FileProvider,
   platform: {
-    name: 'PG Ops',
+    name: 'PG Management',
     platformOwnerUid: 'ePgzejfMinUyvrWMtQe4C5gYwg73',
     platformOwnerName: 'Ananth Kumar',
     defaultTenantId: 'mana-pg',
   },
   property: {
     name: 'Sri Sai PG',
-    shortName: 'PG Ops',
+    shortName: 'PG Management',
     domain: 'pg.picsecure.in',
     city: 'Vijayawada',
   },

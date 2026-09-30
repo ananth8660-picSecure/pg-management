@@ -12,5 +12,10 @@ export const environment = {
     vapidKey: ''
   },
   // Optional: add a reCAPTCHA Enterprise/App Check site key later and enable enforcement in Firebase Console.
-  appCheckSiteKey: ''
+  appCheckSiteKey: '',
+  nativeApp: {
+    version: '0.0.0',
+    versionCode: 0,
+    updateManifestUrl: 'https://mana-pg.web.app/app-release.json'
+  }
 };

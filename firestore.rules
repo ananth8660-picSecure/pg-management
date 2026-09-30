@@ -42,7 +42,7 @@ service cloud.firestore {
       allow create: if platformOwner() || (signedIn() && tid == 'mana-pg' && bootstrapPlatformOwner() && request.resource.data.createdBy == request.auth.uid);
       // Customer PG Owners may update branding only. Platform/commercial access fields
       // (active, forceLogoutEpoch, customer/sale metadata, owner identity) remain creator-controlled.
-      allow update: if platformOwner() || (tenantOwner(tid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','shortName','city','logo','updatedAt','updatedBy']));
+      allow update: if platformOwner() || (tenantOwner(tid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','shortName','city','logo','receiptEmail','updatedAt','updatedBy']));
       allow delete: if platformOwner();
 
       match /members/{uid} {
@@ -82,7 +82,21 @@ service cloud.firestore {
       match /vendors/{id} { allow read, create, update: if permission(tid,'vendors'); allow delete: if tenantOwner(tid); }
       match /calendar/{id} { allow read, create, update: if permission(tid,'calendar'); allow delete: if tenantOwner(tid); }
       match /documents/{id} { allow read, create, update: if permission(tid,'documents'); allow delete: if tenantOwner(tid); }
-      match /notifications/{id} { allow read, create, update: if permission(tid,'notifications'); allow delete: if tenantOwner(tid); }
+      match /notifications/{id} {
+        // Owners can see/manage the complete notification center. Managers are intentionally
+        // restricted at the database layer to tenant rent alerts only.
+        allow read: if tenantOwner(tid) || ((permission(tid,'notifications') || permission(tid,'payments')) && resource.data.type == 'Rent' && resource.data.ownerOnly == false);
+        allow create, delete: if tenantOwner(tid);
+        // Managers may acknowledge only the rent notifications they are allowed to read.
+        // They cannot alter the message, recipient scope, target, priority or any business data.
+        allow update: if tenantOwner(tid) || (
+          (permission(tid,'notifications') || permission(tid,'payments')) &&
+          resource.data.type == 'Rent' && resource.data.ownerOnly == false &&
+          request.resource.data.type == resource.data.type && request.resource.data.ownerOnly == resource.data.ownerOnly &&
+          request.resource.data.status == 'Read' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','readAt','updatedAt'])
+        );
+      }
       match /pushTokens/{id} {
         allow get: if activeMember(tid) && resource.data.uid == request.auth.uid;
         allow list: if false;
